@@ -1,3 +1,3 @@
-cmake_minimum_required(3.26)
+cmake_minimum_required(VERSION 3.26)
 project(fuse_cpp_wrapper)
-
+add_subdirectory(examples)
