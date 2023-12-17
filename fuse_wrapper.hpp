@@ -1,23 +1,95 @@
-#ifndef FUSE_WRAPPER_HPP_INCLUDED
-#define FUSE_WRAPPER_HPP_INCLUDED
+#pragma once
 
 #ifndef __cplusplus
 #error this header requires a C++ compiler
 #endif
 
 #define _FILE_OFFSET_BITS 64  
+#define FUSE_USE_VERSION  39
 
 #include <errno.h>
-#include <fuse.h>
+#include "fuse.h"
+#include <string>
 
 namespace Fuse{
     
     class FileSystemBase
     {
         public:
-            FileSystemBase(){}
+            FileSystemBase()
+            {
+                m_fuseOperations.chmod = FuseChmod;
+                m_fuseOperations.chown = FuseChown;
+                m_fuseOperations.flush = FuseFlush;
+                m_fuseOperations.fsync = FuseFsync;
+                m_fuseOperations.getattr = FuseGetattr;
+                m_fuseOperations.link = FuseLink;
+                m_fuseOperations.mkdir = FuseMkdir;
+                m_fuseOperations.mknod = FuseMknod;
+                m_fuseOperations.open = FuseOpen;
+                m_fuseOperations.read = FuseRead;
+                m_fuseOperations.readlink = FuseReadlink;
+                m_fuseOperations.release = FuseRelease;
+                m_fuseOperations.rename = FuseRename;
+                m_fuseOperations.rmdir = FuseRmdir;
+                m_fuseOperations.statfs = FuseStatfs;
+                m_fuseOperations.symlink = FuseSymlink;
+                m_fuseOperations.truncate = FuseTruncate;
+                m_fuseOperations.unlink = FuseUnlink;
+                m_fuseOperations.utime = FuseUtimens;
+                m_fuseOperations.write = FuseWrite;
+                
+            }
             virtual ~FileSystemBase(){}
-            
+            void MainLoop(const string &mountPoint)
+            {
+                int   ret = 0;
+                int   hsr_argc = 1;
+                char  hsr_program[] = "HSRAgent.exe";
+                char  *hsr_argv[]={hsr_program};
+                struct fuse_args args = FUSE_ARGS_INIT(hsr_argc, hsr_argv);
+                bool   mount_flag = false;
+
+                do
+                {
+                    m_fuseChan = fuse_mount(mountPoint.c_str(), &args);
+                    if( !m_fuseChan )
+                    {
+                        break;
+                    }
+                    mount_flag = true;
+
+                    m_fuse = fuse_new(m_fuseChan,&args, &m_fuseOps,sizeof(struct fuse_operations), this);
+                    if( !m_fuse )
+                    {
+
+                        break;
+                    }
+
+                    ret = fuse_daemonize(1);
+                    if( ret != 0 )
+                    {
+                        break;
+                    }
+
+                    m_fuseSession = fuse_get_session(m_fuse);
+
+                    ret = fuse_loop_mt(m_fuse);
+                    return;
+                }while(0);
+
+                if( mount_flag )
+                {
+                    fuse_unmount(mountPoint.c_str(),m_fuseChan);
+                    m_fuseChan = nullptr;
+                }
+
+                if( m_fuse )
+                {
+                    fuse_destroy(m_fuse);
+                    m_fuse = nullptr;
+                }
+            }
         protected:
             virtual void* Init(struct fuse_conn_info *conn)
             {
@@ -412,11 +484,10 @@ namespace Fuse{
 
 
         private:
-            fuse_operations m_fuseOperations;    
+            fuse_operations        m_fuseOperations;    
+            struct fuse_chan       *m_fuseChan;
+            struct fuse            *m_fuse;
+            struct fuse_session    *m_fuseSession;
     };
 
 }
-
-
-
-#endif
