@@ -5,10 +5,10 @@
 #endif
 
 #define _FILE_OFFSET_BITS 64  
-#define FUSE_USE_VERSION  39
+#define FUSE_USE_VERSION  314
 
 #include <errno.h>
-#include "fuse.h"
+#include "fuse/include/fuse.h"
 #include <string>
 
 namespace Fuse{
@@ -36,52 +36,48 @@ namespace Fuse{
                 m_fuseOperations.symlink = FuseSymlink;
                 m_fuseOperations.truncate = FuseTruncate;
                 m_fuseOperations.unlink = FuseUnlink;
-                m_fuseOperations.utime = FuseUtimens;
+                m_fuseOperations.utimens = FuseUtimens;
                 m_fuseOperations.write = FuseWrite;
                 
             }
             virtual ~FileSystemBase(){}
-            void MainLoop(const string &mountPoint)
+            void MainLoop(const std::string &mountPoint)
             {
                 int   ret = 0;
-                int   hsr_argc = 1;
-                char  hsr_program[] = "HSRAgent.exe";
-                char  *hsr_argv[]={hsr_program};
-                struct fuse_args args = FUSE_ARGS_INIT(hsr_argc, hsr_argv);
+                int   fuse_argc = 1;
+                char  fuse_program[] = "fusefs";
+                char  *fuse_argv[]={fuse_program};
+                struct fuse_args args = FUSE_ARGS_INIT(fuse_argc, fuse_argv);
                 bool   mount_flag = false;
 
                 do
                 {
-                    m_fuseChan = fuse_mount(mountPoint.c_str(), &args);
-                    if( !m_fuseChan )
+                    m_fuse = fuse_new(&args, &m_fuseOperations,sizeof(struct fuse_operations), this);
+                    if( !m_fuse )
+                    {
+                        break;
+                    }
+
+                    ret = fuse_mount(m_fuse,mountPoint.c_str());
+                    if( ret < 0 )
                     {
                         break;
                     }
                     mount_flag = true;
 
-                    m_fuse = fuse_new(m_fuseChan,&args, &m_fuseOps,sizeof(struct fuse_operations), this);
-                    if( !m_fuse )
-                    {
-
-                        break;
-                    }
-
                     ret = fuse_daemonize(1);
-                    if( ret != 0 )
+                    if( ret < 0 )
                     {
                         break;
                     }
 
-                    m_fuseSession = fuse_get_session(m_fuse);
-
-                    ret = fuse_loop_mt(m_fuse);
+                    ret = fuse_loop_mt(m_fuse,nullptr);
                     return;
                 }while(0);
 
                 if( mount_flag )
                 {
-                    fuse_unmount(mountPoint.c_str(),m_fuseChan);
-                    m_fuseChan = nullptr;
+                    fuse_unmount(m_fuse);
                 }
 
                 if( m_fuse )
@@ -232,7 +228,7 @@ namespace Fuse{
                 return pSelf->Init(conn);
             }
 
-            static int   FuseGetattr(const char *path,struct stat *stbuf)
+            static int   FuseGetattr(const char *path,struct stat *stbuf, struct fuse_file_info *fi)
             {
                 FileSystemBase  *pSelf = static_cast<FileSystemBase*>(fuse_get_context()->private_data);
                 if( !pSelf ){
@@ -342,7 +338,7 @@ namespace Fuse{
                 return pSelf->Rmdir(path);
             }
 
-            static int   FuseRename(const char *from,const char *to)
+            static int   FuseRename(const char *from,const char *to,unsigned int flags)
             {
                 FileSystemBase  *pSelf = static_cast<FileSystemBase*>(fuse_get_context()->private_data);
                 if( !pSelf ){
@@ -362,7 +358,7 @@ namespace Fuse{
                 return pSelf->Link(from,to);
             }
 
-            static int   FuseChmod(const char *path,mode_t mode)
+            static int   FuseChmod(const char *path,mode_t mode,struct fuse_file_info *fi)
             {
                 FileSystemBase  *pSelf = static_cast<FileSystemBase*>(fuse_get_context()->private_data);
                 if( !pSelf ){
@@ -372,7 +368,7 @@ namespace Fuse{
                 return pSelf->Chmod(path,mode);
             }
 
-            static int   FuseChown(const char *path,uid_t uid,gid_t gid)
+            static int   FuseChown(const char *path,uid_t uid,gid_t gid, struct fuse_file_info *fi)
             {
                 FileSystemBase  *pSelf = static_cast<FileSystemBase*>(fuse_get_context()->private_data);
                 if( !pSelf ){
@@ -382,7 +378,7 @@ namespace Fuse{
                 return pSelf->Chown(path,uid,gid);
             }
 
-            static int   FuseTruncate(const char *path,off_t size)
+            static int   FuseTruncate(const char *path,off_t size, struct fuse_file_info *fi)
             {
                 FileSystemBase  *pSelf = static_cast<FileSystemBase*>(fuse_get_context()->private_data);
                 if( !pSelf ){
@@ -392,7 +388,7 @@ namespace Fuse{
                 return pSelf->Truncate(path,size);
             }
 
-            static int   FuseUtimens(const char *path,const struct timespec tv[2])
+            static int   FuseUtimens(const char *path,const struct timespec tv[2],struct fuse_file_info *fi)
             {
                 FileSystemBase  *pSelf = static_cast<FileSystemBase*>(fuse_get_context()->private_data);
                 if( !pSelf ){
@@ -485,9 +481,7 @@ namespace Fuse{
 
         private:
             fuse_operations        m_fuseOperations;    
-            struct fuse_chan       *m_fuseChan;
             struct fuse            *m_fuse;
-            struct fuse_session    *m_fuseSession;
     };
 
 }

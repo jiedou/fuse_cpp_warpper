@@ -31,9 +31,9 @@ class HelloFileSystem:public Fuse::FileSystemBase
         if (strcmp(path, "/") != 0)
 		    return -ENOENT;
 
-        filler(dbuf, ".", NULL, 0);
-        filler(dbuf, "..", NULL, 0);
-        filler(dbuf, filename, NULL, 0);
+        filler(dbuf, ".", NULL, 0,FUSE_FILL_DIR_PLUS);
+        filler(dbuf, "..", NULL, 0,FUSE_FILL_DIR_PLUS);
+        filler(dbuf, filename, NULL, 0,FUSE_FILL_DIR_PLUS);
         return 0;
     }
 
