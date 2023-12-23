@@ -18,6 +18,8 @@ namespace Fuse{
         public:
             FileSystemBase()
             {
+                m_fuseOperations.init = FuseInit;
+                m_fuseOperations.destroy = FuseDestory;
                 m_fuseOperations.chmod = FuseChmod;
                 m_fuseOperations.chown = FuseChown;
                 m_fuseOperations.flush = FuseFlush;
@@ -38,6 +40,11 @@ namespace Fuse{
                 m_fuseOperations.unlink = FuseUnlink;
                 m_fuseOperations.utimens = FuseUtimens;
                 m_fuseOperations.write = FuseWrite;
+                m_fuseOperations.opendir = FuseOpendir;
+                m_fuseOperations.readdir = FuseReaddir;
+                m_fuseOperations.releasedir = FuseReleasedir;
+                m_fuseOperations.access = FuseAccess;
+                m_fuseOperations.create = FuseCreate;
                 
             }
             virtual ~FileSystemBase(){}
@@ -71,7 +78,12 @@ namespace Fuse{
                         break;
                     }
 
-                    ret = fuse_loop_mt(m_fuse,nullptr);
+                    struct fuse_loop_config *loop_config = NULL;
+                    loop_config = fuse_loop_cfg_create();
+                    if( !loop_config ){
+                        break;
+                    }
+                    ret = fuse_loop_mt(m_fuse,loop_config);
                     return;
                 }while(0);
 
@@ -89,7 +101,7 @@ namespace Fuse{
         protected:
             virtual void* Init(struct fuse_conn_info *conn)
             {
-                return nullptr;
+                return this;
             }
 
             virtual int  Getattr(const char *path,struct stat *stbuf)
@@ -218,7 +230,7 @@ namespace Fuse{
             }
 
         private:
-            static void* FuseInit(struct fuse_conn_info *conn)
+            static void* FuseInit(struct fuse_conn_info *conn,struct fuse_config *cfg)
             {
                 FileSystemBase  *pSelf = static_cast<FileSystemBase*>(fuse_get_context()->private_data);
                 if( !pSelf ){
@@ -226,6 +238,11 @@ namespace Fuse{
                 }
 
                 return pSelf->Init(conn);
+            }
+
+            static void FuseDestory(void *private_data)
+            {
+
             }
 
             static int   FuseGetattr(const char *path,struct stat *stbuf, struct fuse_file_info *fi)
@@ -258,7 +275,7 @@ namespace Fuse{
                 return pSelf->Opendir(path,fi);
             }
 
-            static int   FuseReaddir(const char *path,void *dbuf,fuse_fill_dir_t filler,off_t offset,struct fuse_file_info *fi)
+            static int   FuseReaddir(const char *path,void *dbuf,fuse_fill_dir_t filler,off_t offset,struct fuse_file_info *fi,enum fuse_readdir_flags)
             {
                 FileSystemBase  *pSelf = static_cast<FileSystemBase*>(fuse_get_context()->private_data);
                 if( !pSelf ){
